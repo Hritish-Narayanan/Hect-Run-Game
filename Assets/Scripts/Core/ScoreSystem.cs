@@ -65,7 +65,7 @@ namespace SubwaySurfers.Core
             Game.Get<SaveSystem>()?.RecordCoin();
             Score += GameConfig.CoinScore * multiplier;
             if (Coins % 50 == 0)
-                Game.I?.SpeedUpFromCoins();
+            Game.I?.SpeedUpFromJump();
 
             Combo = Mathf.Min(GameConfig.MaxCombo, Combo + 1);
             comboTimer = GameConfig.ComboWindow;

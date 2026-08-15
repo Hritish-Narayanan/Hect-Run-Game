@@ -51,7 +51,7 @@ namespace SubwaySurfers.Core
             I = this;
             DontDestroyOnLoad(gameObject);
 
-            Application.targetFrameRate = GetTargetFrameRate();
+            Application.targetFrameRate = 144;
             QualitySettings.vSyncCount = 0;
 
             SetupEnvironment();
@@ -141,9 +141,9 @@ namespace SubwaySurfers.Core
             Speed = Mathf.Min(GameConfig.MaxSpeed, Speed + GameConfig.SpeedRamp * Time.deltaTime);
         }
 
-        public void SpeedUpFromCoins()
+        public void SpeedUpFromJump()
         {
-            Speed = Mathf.Min(GameConfig.MaxSpeed, Speed + 0.75f);
+            Speed = Mathf.Min(GameConfig.MaxSpeed, Speed * 1.01f);
         }
 
         // ---- Run lifecycle (called by UI / PlayerController) ----
