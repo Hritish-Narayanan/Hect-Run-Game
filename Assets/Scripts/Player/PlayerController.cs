@@ -1,4 +1,5 @@
 using UnityEngine;
+using SubwaySurfers.Core;
 
 namespace SubwaySurfers.Player
 {
@@ -111,6 +112,9 @@ namespace SubwaySurfers.Player
             grounded = false;
             yVel = Core.GameConfig.JumpForce;
             Core.Game.Get<Audio.AudioSystem>()?.PlayJump();
+
+            // Increase speed by 1% on jump
+            Core.Game.I?.SpeedUpFromJump();
         }
 
         public void Roll()
@@ -128,8 +132,8 @@ namespace SubwaySurfers.Player
         private void EndRoll()
         {
             rolling = false;
-            col.height = Core.GameConfig.PlayerHeight;
-            col.center = Vector3.zero;
+            col.height = 2f;
+            col.center = new Vector3(0f, 0.9f, 0f);
             transform.localScale = Vector3.one;
         }
 
