@@ -13,6 +13,7 @@ namespace SubwaySurfers.Player
     {
         private CapsuleCollider col;
         private Rigidbody rb;
+        private GameObject shieldVisual;
 
         private int lane = 1;
         private float x;
@@ -32,7 +33,7 @@ namespace SubwaySurfers.Player
             col = GetComponent<CapsuleCollider>();
             rb = gameObject.AddComponent<Rigidbody>();
             rb.isKinematic = true;
-            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.interpolation = RigidbodyInterpolation.None;
 
             x = transform.position.x;
 
@@ -40,6 +41,20 @@ namespace SubwaySurfers.Player
             input.OnLane += MoveLane;
             input.OnJump += Jump;
             input.OnRoll += Roll;
+
+            // Create shield visual ellipsoid around the player capsule
+            shieldVisual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            shieldVisual.name = "ShieldVisual";
+            shieldVisual.transform.SetParent(transform, false);
+            shieldVisual.transform.localPosition = new Vector3(0f, 1.0f, 0f); // Center of the 2m capsule
+            shieldVisual.transform.localScale = new Vector3(1.8f, 2.2f, 1.8f); // Slightly larger than capsule bounds
+            var sCol = shieldVisual.GetComponent<Collider>();
+            if (sCol != null) Destroy(sCol);
+
+            var shieldColor = Core.GameConfig.PowerupColors[(int)Core.PowerupType.Shield];
+            shieldColor.a = 0.35f; // Set transparency alpha
+            shieldVisual.GetComponent<Renderer>().sharedMaterial = Core.GameConfig.GetMaterial("shield", shieldColor);
+            shieldVisual.SetActive(false);
         }
 
         private static Core.InputReader EnsureInput()
@@ -72,8 +87,11 @@ namespace SubwaySurfers.Player
             // Gravity / jump
             if (!grounded)
             {
+                float speedRatio = Core.Game.I != null ? (Core.Game.I.Speed / Core.GameConfig.StartSpeed) : 1f;
+                float baseGravity = 12.8f;
+                float gravity = baseGravity * speedRatio * speedRatio;
                 float mult = yVel < 0 ? Core.GameConfig.FallMultiplier : 1f;
-                yVel += Physics.gravity.y * mult * dt;
+                yVel -= gravity * mult * dt;
                 pos.y += yVel * dt;
                 if (pos.y <= 1f)
                 {
@@ -81,13 +99,20 @@ namespace SubwaySurfers.Player
                     grounded = true;
                     yVel = 0f;
                     Core.Game.Get<Audio.AudioSystem>()?.PlayLand();
+
+                    // Reset the roll timer upon landing to ensure full roll duration is executed on ground
+                    if (rolling)
+                    {
+                        rollTimer = Core.GameConfig.RollDuration;
+                    }
                 }
             }
 
-            // Roll timer
-            if (rolling)
+            // Roll timer - only ticks down while grounded (allows rolling in mid-air without pre-expiring)
+            if (rolling && grounded)
             {
-                rollTimer -= dt;
+                float speedRatio = Core.Game.I != null ? (Core.Game.I.Speed / Core.GameConfig.StartSpeed) : 1f;
+                rollTimer -= dt * speedRatio; // Scale timer with speed so distance covered remains constant
                 if (rollTimer <= 0f) EndRoll();
             }
 
@@ -97,6 +122,20 @@ namespace SubwaySurfers.Player
             transform.rotation = Quaternion.Euler(0f, 0f, leanZ);
 
             transform.position = pos;
+
+            // Update shield visual
+            var power = Core.Game.Get<Core.PowerupSystem>();
+            bool shieldActive = (power != null && power.Shield);
+            if (shieldVisual != null)
+            {
+                shieldVisual.SetActive(shieldActive);
+                if (shieldActive)
+                {
+                    // Rotate the shield slowly for a dynamic energy bubble effect
+                    shieldVisual.transform.Rotate(Vector3.up, 45f * dt, Space.Self);
+                    shieldVisual.transform.Rotate(Vector3.right, 15f * dt, Space.Self);
+                }
+            }
         }
 
         public void MoveLane(int dir)
@@ -110,7 +149,8 @@ namespace SubwaySurfers.Player
             if (!grounded) return;
             if (rolling) EndRoll();
             grounded = false;
-            yVel = Core.GameConfig.JumpForce;
+            float speedRatio = Core.Game.I != null ? (Core.Game.I.Speed / Core.GameConfig.StartSpeed) : 1f;
+            yVel = Core.GameConfig.JumpForce * speedRatio;
             Core.Game.Get<Audio.AudioSystem>()?.PlayJump();
 
             // Increase speed by 1% on jump
@@ -119,8 +159,17 @@ namespace SubwaySurfers.Player
 
         public void Roll()
         {
-            if (rolling) return;
-            if (!grounded) yVel = Mathf.Min(yVel, -12f); // slam down
+            if (rolling && grounded)
+            {
+                // Refresh the roll timer if swiped down again on the ground
+                rollTimer = Core.GameConfig.RollDuration;
+                return;
+            }
+            if (!grounded)
+            {
+                float speedRatio = Core.Game.I != null ? (Core.Game.I.Speed / Core.GameConfig.StartSpeed) : 1f;
+                yVel = Mathf.Min(yVel, -12f * speedRatio); // slam down
+            }
             rolling = true;
             rollTimer = Core.GameConfig.RollDuration;
             col.height = Core.GameConfig.RollHeight;
@@ -173,6 +222,17 @@ namespace SubwaySurfers.Player
                 yield return null;
             }
             gameObject.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            var input = Core.Game.Get<Core.InputReader>();
+            if (input != null)
+            {
+                input.OnLane -= MoveLane;
+                input.OnJump -= Jump;
+                input.OnRoll -= Roll;
+            }
         }
 
         public Vector3 TopCenter => transform.position + Vector3.up * (col.height * 0.5f);

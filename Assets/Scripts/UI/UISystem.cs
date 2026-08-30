@@ -261,6 +261,7 @@ namespace SubwaySurfers.UI
                     HidePanel(pausePanel);
                     HidePanel(gameOverPanel);
                     hud.gameObject.SetActive(false);
+                    if (mobileControls != null) mobileControls.SetActive(false);
                     break;
                 case Core.GameState.Playing:
                     HidePanel(startPanel);
@@ -268,12 +269,15 @@ namespace SubwaySurfers.UI
                     HidePanel(gameOverPanel);
                     HidePanel(settingsPanel);
                     hud.gameObject.SetActive(true);
+                    if (mobileControls != null && (Application.isMobilePlatform || Input.touchSupported))
+                        mobileControls.SetActive(true);
                     break;
                 case Core.GameState.Paused:
                     ShowPanel(pausePanel);
                     break;
                 case Core.GameState.GameOver:
                     ShowGameOver();
+                    if (mobileControls != null) mobileControls.SetActive(false);
                     break;
             }
         }
@@ -348,20 +352,23 @@ namespace SubwaySurfers.UI
         {
             resDropdown.ClearOptions();
             var options = new List<string>();
-            var refreshRates = new List<int>();
             bool mobile = Application.isMobilePlatform || Input.touchSupported;
-
+            int selectedIndex = 0;
+ 
             if (mobile)
             {
-                foreach (var resolution in Screen.resolutions)
+                var mobileFrameRates = new List<int> { 30, 60, 90, 120, -1 };
+                foreach (int fps in mobileFrameRates)
                 {
-                    int hz = Mathf.RoundToInt((float)resolution.refreshRateRatio.value);
-                    if (hz > 0 && !refreshRates.Contains(hz)) refreshRates.Add(hz);
+                    if (fps == -1) options.Add("Unlocked");
+                    else options.Add(fps + " FPS");
                 }
-                if (refreshRates.Count == 0) refreshRates.Add(Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value));
-                refreshRates.Sort();
-                foreach (int hz in refreshRates) options.Add(hz + " Hz");
-                resDropdown.value = Mathf.Max(0, refreshRates.IndexOf(Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value)));
+ 
+                int currentFPS = PlayerPrefs.GetInt(Core.GameConfig.KeyFPS, -1);
+                int index = mobileFrameRates.IndexOf(currentFPS);
+                if (index < 0) index = mobileFrameRates.IndexOf(-1);
+ 
+                selectedIndex = Mathf.Max(0, index);
             }
             else
             {
@@ -370,9 +377,10 @@ namespace SubwaySurfers.UI
                 int current = 0;
                 for (int i = 0; i < Screen.resolutions.Length; i++)
                     if (Screen.resolutions[i].width == Screen.currentResolution.width && Screen.resolutions[i].height == Screen.currentResolution.height) current = i;
-                resDropdown.value = current;
+                selectedIndex = current;
             }
             resDropdown.AddOptions(options);
+            resDropdown.value = selectedIndex; // Set value AFTER adding options to prevent clamping!
             resDropdown.RefreshShownValue();
 
             qualityDropdown.ClearOptions();
@@ -397,20 +405,25 @@ namespace SubwaySurfers.UI
         private void ApplySettings()
         {
             bool mobile = Application.isMobilePlatform || Input.touchSupported;
+            var save = Core.Game.Get<Core.SaveSystem>();
             if (mobile)
             {
-                var rates = new List<int>();
-                foreach (var resolution in Screen.resolutions)
+                var mobileFrameRates = new List<int> { 30, 60, 90, 120, -1 };
+                if (resDropdown.value >= 0 && resDropdown.value < mobileFrameRates.Count)
                 {
-                    int hz = Mathf.RoundToInt((float)resolution.refreshRateRatio.value);
-                    if (hz > 0 && !rates.Contains(hz)) rates.Add(hz);
-                }
-                rates.Sort();
-                if (resDropdown.value >= 0 && resDropdown.value < rates.Count)
-                {
-                    Application.targetFrameRate = rates[resDropdown.value];
-                    var refresh = new RefreshRate { numerator = (uint)rates[resDropdown.value], denominator = 1 };
+                    int selectedFPS = mobileFrameRates[resDropdown.value];
+                    
+                    // Force display mode to maximum supported refresh rate (e.g. 120Hz)
+                    Core.Game.UnlockAndroidRefreshRate();
+                    int maxHz = Core.Game.GetMaxSupportedRefreshRate();
+                    var refresh = new RefreshRate { numerator = (uint)maxHz, denominator = 1 };
                     Screen.SetResolution(Screen.width, Screen.height, Screen.fullScreenMode, refresh);
+                    
+                    QualitySettings.vSyncCount = 1; // Always keep VSync enabled on mobile
+                    Application.targetFrameRate = selectedFPS == -1 ? -1 : Mathf.Min(selectedFPS, maxHz);
+                    
+                    if (save != null) save.SetInt(Core.GameConfig.KeyFPS, selectedFPS);
+                    else PlayerPrefs.SetInt(Core.GameConfig.KeyFPS, selectedFPS);
                 }
                 Core.GameConfig.SetQualityMode(true);
             }
@@ -431,7 +444,6 @@ namespace SubwaySurfers.UI
                 audio.SetMuted(muteToggle.isOn);
             }
 
-            var save = Core.Game.Get<Core.SaveSystem>();
             if (save != null)
             {
                 save.SetInt(Core.GameConfig.KeyQuality, qualityDropdown.value);
@@ -493,6 +505,7 @@ namespace SubwaySurfers.UI
             var t = go.GetComponent<Text>();
             t.text = content;
             t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (t.font == null) t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             t.fontSize = size;
             t.alignment = anchor;
             t.color = Color.white;

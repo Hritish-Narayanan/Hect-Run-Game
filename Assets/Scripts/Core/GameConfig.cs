@@ -26,8 +26,8 @@ namespace SubwaySurfers.Core
         public const float LaneLeanDegrees = 14f;
 
         // Jump / gravity / roll
-        public const float JumpForce = 8.2f;
-        public const float FallMultiplier = 2.6f;
+        public const float JumpForce = 6.8f;
+        public const float FallMultiplier = 2.0f;
         public const float RollDuration = 0.65f;
         public const float RollHeight = 0.6f;
         public const float PlayerHeight = 2f;
@@ -48,6 +48,7 @@ namespace SubwaySurfers.Core
         public const string KeyFullscreen = "surfer_fullscreen";
         public const string KeyVolume = "surfer_volume";
         public const string KeyMuted = "surfer_muted";
+        public const string KeyFPS = "surfer_fps";
 
         // Palette
         public static readonly Color SkyColor = new Color(0.53f, 0.76f, 0.95f);
@@ -101,14 +102,77 @@ namespace SubwaySurfers.Core
                         coinMat.SetColor("_EmissionColor", color * 0.9f);
                     }
                     return coinMat;
+                case "shield":
+                    var shieldMat = MakeMat(color);
+                    shieldMat.SetFloat("_Surface", 1f); // 1.0 is Transparent in URP Lit
+                    shieldMat.SetFloat("_Blend", 0f); // 0.0 is Alpha blend
+                    shieldMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    shieldMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    shieldMat.SetInt("_ZWrite", 0); // Disable depth write
+                    shieldMat.DisableKeyword("_ALPHATEST_ON");
+                    shieldMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    shieldMat.EnableKeyword("_BLENDMODE_ALPHA");
+                    shieldMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    shieldMat.EnableKeyword("_EMISSION");
+                    shieldMat.SetColor("_EmissionColor", color * 0.6f); // Glowing edge/emission
+                    return shieldMat;
                 default:
                     return MakeMat(color);
             }
         }
 
+        private static Shader defaultShader;
+        private static Shader DefaultShader
+        {
+            get
+            {
+                if (defaultShader == null)
+                {
+                    // 1. Try loading from the dummy material in Resources.
+                    // This is the most reliable way in URP builds on mobile because the material (and its shader)
+                    // are guaranteed to be included in the build via the Resources directory.
+                    var dummyMat = Resources.Load<Material>("URPLitDummy");
+                    if (dummyMat != null && dummyMat.shader != null)
+                    {
+                        defaultShader = dummyMat.shader;
+                    }
+                }
+                if (defaultShader == null || defaultShader.name == "Standard")
+                {
+                    // 2. Try the primitive cube route
+                    var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    var renderer = temp.GetComponent<Renderer>();
+                    if (renderer != null && renderer.sharedMaterial != null)
+                    {
+                        var s = renderer.sharedMaterial.shader;
+                        if (s != null && s.name != "Standard")
+                        {
+                            defaultShader = s;
+                        }
+                    }
+                    Object.DestroyImmediate(temp);
+                }
+                if (defaultShader == null || defaultShader.name == "Standard")
+                {
+                    defaultShader = Shader.Find("Universal Render Pipeline/Lit");
+                }
+                if (defaultShader == null)
+                {
+                    defaultShader = Shader.Find("Standard");
+                }
+                return defaultShader;
+            }
+        }
+
         private static Material MakeMat(Color c)
         {
-            return new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = c };
+            var shader = DefaultShader;
+            if (shader == null)
+            {
+                // Absolute fallback just in case
+                return new Material(Shader.Find("Hidden/Internal-Colored")) { color = c };
+            }
+            return new Material(shader) { color = c };
         }
     }
 }

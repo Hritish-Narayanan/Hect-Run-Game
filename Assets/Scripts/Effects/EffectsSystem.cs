@@ -45,7 +45,17 @@ namespace SubwaySurfers.Effects
             shape.radius = 0.3f;
 
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+            Shader shader = null;
+            var dummyMat = Resources.Load<Material>("URPParticlesUnlitDummy");
+            if (dummyMat != null && dummyMat.shader != null)
+            {
+                shader = dummyMat.shader;
+            }
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader == null) shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
+            renderer.material = new Material(shader);
             renderer.material.color = color;
 
             return ps;

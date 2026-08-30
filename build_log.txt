@@ -1,0 +1,33 @@
+Unity Editor version:    6000.5.4f1 (d550df8bd089)
+Branch:                  6000.5/staging
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.6.2 (Build 25G83)
+Darwin version:          25.6.0
+Architecture:            arm64
+Running under Rosetta:   NO
+Available memory:        8192 MB
+Date:                    2026-08-30T19:44:07Z
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-hritish" at "2026-08-30T19:44:07.112901Z"
+Launching external process: /Applications/Unity/Hub/Editor/6000.5.4f1/Unity.app/Contents/Helpers/PackageManager/Server/UnityPackageManager
+
+COMMAND LINE ARGUMENTS:
+/Applications/Unity/Hub/Editor/6000.5.4f1/Unity.app/Contents/MacOS/Unity
+-batchmode
+-quit
+-projectPath
+/Users/hritish/Documents/Game dev/Subway surfers
+-executeMethod
+BuildScript.BuildAndroid
+-logFile
+build_log.txt
+Successfully changed project path to: /Users/hritish/Documents/Game dev/Subway surfers
+/Users/hritish/Documents/Game dev/Subway surfers
+[Licensing::Client] Error: HandshakeResponse reported an error:
+	ResponseCode: 505
+	ResponseStatus: Unsupported protocol version '1.18.1'.
+[Licensing::Module] Error: Failed to handshake to channel: "LicenseClient-hritish"
+[Licensing::IpcConnector] LicenseClient-hritish channel disconnected successfully.
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-hritish-6000.5.4" at "2026-08-30T19:44:07.685359Z"
+[Package Manager] Server process was shutdown
