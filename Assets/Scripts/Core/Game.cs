@@ -51,14 +51,101 @@ namespace SubwaySurfers.Core
             I = this;
             DontDestroyOnLoad(gameObject);
 
-            Application.targetFrameRate = 144;
-            QualitySettings.vSyncCount = 0;
+            int savedFPS = PlayerPrefs.GetInt(GameConfig.KeyFPS, -1);
+            bool mobile = Application.isMobilePlatform || Input.touchSupported;
+            if (mobile)
+            {
+                UnlockAndroidRefreshRate();
+
+                // Force display mode to maximum supported refresh rate (e.g. 120Hz)
+                int maxHz = GetMaxSupportedRefreshRate();
+                var refresh = new RefreshRate { numerator = (uint)maxHz, denominator = 1 };
+                Screen.SetResolution(Screen.width, Screen.height, Screen.fullScreenMode, refresh);
+
+                QualitySettings.vSyncCount = 1; // Must remain enabled on mobile for targetFrameRate pacing
+                Application.targetFrameRate = savedFPS == -1 ? -1 : Mathf.Min(savedFPS, maxHz);
+            }
+            else
+            {
+                if (savedFPS == -1)
+                {
+                    QualitySettings.vSyncCount = 1;
+                    Application.targetFrameRate = -1;
+                }
+                else
+                {
+                    QualitySettings.vSyncCount = 0;
+                    Application.targetFrameRate = savedFPS;
+                }
+            }
 
             SetupEnvironment();
             StartCoroutine(Boot());
         }
 
-        private static int GetTargetFrameRate()
+        public static void UnlockAndroidRefreshRate()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                {
+                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                    {
+                        using (var window = activity.Call<AndroidJavaObject>("getWindow"))
+                        using (var windowManager = activity.Call<AndroidJavaObject>("getWindowManager"))
+                        using (var display = windowManager.Call<AndroidJavaObject>("getDefaultDisplay"))
+                        {
+                            var modes = display.Call<AndroidJavaObject[]>("getSupportedModes");
+                            if (modes != null && modes.Length > 0)
+                            {
+                                AndroidJavaObject bestMode = null;
+                                float maxRefreshRate = 0;
+                                foreach (var mode in modes)
+                                {
+                                    float rate = mode.Call<float>("getRefreshRate");
+                                    if (rate > maxRefreshRate)
+                                    {
+                                        maxRefreshRate = rate;
+                                        bestMode = mode;
+                                    }
+                                }
+                                if (bestMode != null)
+                                {
+                                    int modeId = bestMode.Call<int>("getModeId");
+                                    using (var layoutParams = window.Call<AndroidJavaObject>("getAttributes"))
+                                    {
+                                        layoutParams.Set("preferredDisplayModeId", modeId);
+                                        window.Call("setAttributes", layoutParams);
+                                    }
+                                }
+                            }
+                        }
+                    }));
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("Failed to set Android high refresh rate: " + e.Message);
+            }
+#endif
+        }
+
+        public static int GetMaxSupportedRefreshRate()
+        {
+            int maxHz = 60;
+            foreach (var resolution in Screen.resolutions)
+            {
+                int hz = Mathf.RoundToInt((float)resolution.refreshRateRatio.value);
+                if (hz > maxHz) maxHz = hz;
+            }
+            double currentHz = Screen.currentResolution.refreshRateRatio.value;
+            if (currentHz > maxHz) maxHz = Mathf.RoundToInt((float)currentHz);
+            return maxHz;
+        }
+
+        public static int GetTargetFrameRate()
         {
             double hz = Screen.currentResolution.refreshRateRatio.value;
             return hz > 1 ? (int)hz : 60;

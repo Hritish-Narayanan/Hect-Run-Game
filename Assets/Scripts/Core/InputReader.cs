@@ -15,6 +15,8 @@ namespace SubwaySurfers.Core
         public event System.Action OnAnyStart;    // any tap/key in menus
         public event System.Action OnPause;
 
+        private void Awake() => Game.Register(this);
+
         private Vector2 swipeStart;
         private float swipeTime;
         private bool tracking;
@@ -48,7 +50,7 @@ namespace SubwaySurfers.Core
         {
             if (Input.touchCount == 0) return;
             var t = Input.GetTouch(0);
-            if (t.phase == TouchPhase.Began && !OverUI(t.fingerId))
+            if (t.phase == TouchPhase.Began)
                 OnAnyStart?.Invoke();
         }
 
@@ -56,7 +58,7 @@ namespace SubwaySurfers.Core
         {
             if (Input.touchCount == 0) { tracking = false; return; }
             var t = Input.GetTouch(0);
-
+ 
             if (t.phase == TouchPhase.Began)
             {
                 if (OverUI(t.fingerId)) { tracking = false; return; }
@@ -65,20 +67,33 @@ namespace SubwaySurfers.Core
                 swipeTime = Time.unscaledTime;
                 return;
             }
-
-            if (!tracking || t.phase != TouchPhase.Ended) return;
-            tracking = false;
-
-            if (Time.unscaledTime - swipeTime > MaxSwipeTime) return;
-            Vector2 d = t.position - swipeStart;
-            if (d.magnitude < MinSwipe) return;
-
-            if (Mathf.Abs(d.x) > Mathf.Abs(d.y))
-                OnLane?.Invoke(d.x < 0 ? -1 : 1);
-            else if (d.y > 0)
-                OnJump?.Invoke();
-            else
-                OnRoll?.Invoke();
+ 
+            if (!tracking) return;
+ 
+            if (t.phase == TouchPhase.Moved || t.phase == TouchPhase.Ended)
+            {
+                if (Time.unscaledTime - swipeTime > MaxSwipeTime)
+                {
+                    tracking = false;
+                    return;
+                }
+                Vector2 d = t.position - swipeStart;
+                if (d.magnitude >= MinSwipe)
+                {
+                    tracking = false; // Consume the touch swipe so it only triggers once
+                    if (Mathf.Abs(d.x) > Mathf.Abs(d.y))
+                        OnLane?.Invoke(d.x < 0 ? -1 : 1);
+                    else if (d.y > 0)
+                        OnJump?.Invoke();
+                    else
+                        OnRoll?.Invoke();
+                }
+            }
+ 
+            if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
+            {
+                tracking = false;
+            }
         }
 
         private static bool OverUI(int fingerId)
